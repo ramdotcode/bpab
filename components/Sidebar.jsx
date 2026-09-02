@@ -53,6 +53,9 @@ export default function Sidebar({ children }) {
     if (g) setTerbuka(g);
   }, [pathname]);
 
+  // Halaman login berdiri sendiri, tanpa sidebar.
+  if (pathname === '/login') return null;
+
   return (
     <aside className="flex w-[290px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-surface p-5">
       <Link href="/" className="mb-5 flex items-center gap-3">
@@ -117,8 +120,9 @@ export default function Sidebar({ children }) {
       {/* Bagian bawah khusus per halaman */}
       {children && <div className="mt-4 flex flex-col gap-4">{children}</div>}
 
-      <div className="mt-auto pt-5 text-center">
+      <div className="mt-auto flex flex-col gap-2 pt-5">
         <StatusDevice />
+        <TombolKeluar />
       </div>
     </aside>
   );
@@ -152,6 +156,25 @@ function StatusDevice() {
       className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-line bg-bg px-3.5 py-2.5 text-left transition-colors hover:border-dim">
       <span className="text-xs font-semibold text-dim">{status.teks}</span>
       <span className={`size-2.5 shrink-0 rounded-full ${warna[status.keadaan]}`} />
+    </button>
+  );
+}
+
+// Hapus cookie sesi lalu kembali ke halaman login.
+function TombolKeluar() {
+  const [sibuk, setSibuk] = useState(false);
+  const keluar = async () => {
+    setSibuk(true);
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
+    window.location.replace('/login');
+  };
+  return (
+    <button onClick={keluar} disabled={sibuk}
+      className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-line px-3.5 py-2 text-xs font-semibold text-dim transition-colors hover:border-red/40 hover:bg-red/10 hover:text-red disabled:opacity-50">
+      <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
+      {sibuk ? 'Keluar...' : 'Keluar'}
     </button>
   );
 }

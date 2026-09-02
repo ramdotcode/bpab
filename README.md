@@ -33,14 +33,25 @@ PERIODE_TAHUN, PERIODE_BULAN                  override periode (kosong = bulan b
 USER_INPUT_ID                                 nilai kolom user_input (default 10)
 IZINKAN_TULIS_METERAN=false                   jadikan input meteran simulasi saja
 IZINKAN_TAMBAH_PELANGGAN=false                jadikan tambah pelanggan simulasi saja
+AUTH_USER, AUTH_PASS                          satu akun login untuk masuk aplikasi
+AUTH_SECRET                                   kunci acak penandatangan cookie sesi
 ```
 
-File ini tidak ikut ke git. Kredensial tidak pernah dikirim ke browser.
+File ini tidak ikut ke git; salin dari `.env.example`. Kredensial tidak pernah
+dikirim ke browser.
+
+## Login
+
+Seluruh halaman dan `/api/*` dijaga oleh `proxy.js`: tanpa cookie sesi yang sah,
+halaman dialihkan ke `/login` dan API membalas 401. Hanya ada **satu akun**, diambil
+dari `AUTH_USER` / `AUTH_PASS`. Sesi berlaku 7 hari; tombol **Keluar** ada di
+bawah sidebar. Ganti password cukup dengan mengubah `.env.local` lalu restart.
 
 ## Halaman
 
 | Rute | Isi |
 |------|-----|
+| `/login` | Halaman masuk (satu akun dari `.env.local`) |
 | `/` | Ringkasan: pelanggan aktif, tunggakan, progres meteran, tunggakan terbesar |
 | `/meteran` | **Input meteran** — hitung otomatis, Enter untuk simpan & lanjut baris berikut |
 | `/pelanggan` | Daftar + cari (nama/kode/HP/alamat) + filter RT & penunggak |
@@ -61,6 +72,8 @@ lib/             logika server — dipakai ulang dari versi Express, tidak diuba
   targets.js     target broadcast + helper periode
   messages.js    template pesan WhatsApp
   api.js         pembantu respons route
+  auth.js        token sesi login (HMAC, Web Crypto)
+proxy.js         penjaga rute: wajib login kecuali /login & /api/auth
   format.js      format angka & tanggal
 app/api/         13 route handler (pembungkus tipis di atas lib/)
 app/             halaman
