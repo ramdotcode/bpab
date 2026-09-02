@@ -1,65 +1,125 @@
-import Image from "next/image";
+// Halaman depan: ringkasan. Ini Server Component — datanya diambil langsung
+// dari lib/ tanpa lewat HTTP, jadi tidak ada bolak-balik jaringan.
+import Link from 'next/link';
+import { listPelanggan } from '@/lib/customers';
+import { daftarMeteran } from '@/lib/meter';
+import { periodeDefault, labelBulan } from '@/lib/targets';
+import { StatCard, Panel, ProgressBar, Badge, PageHeader } from '@/components/ui';
+import { rupiah } from '@/lib/format';
 
-export default function Home() {
+export const dynamic = 'force-dynamic';
+
+export default async function Beranda() {
+  const p = periodeDefault();
+  const label = labelBulan(p.bulan, p.tahun);
+
+  let pelanggan = [];
+  let meteran = null;
+  let galat = null;
+  try {
+    [pelanggan, meteran] = await Promise.all([
+      listPelanggan({}),
+      daftarMeteran({ tahun: p.tahun, bulan: p.bulan }),
+    ]);
+  } catch (e) {
+    galat = e.message;
+  }
+
+  if (galat) {
+    return (
+      <>
+        <PageHeader title="Beranda" desc={`Periode ${label}`} />
+        <div className="p-7">
+          <Panel className="border-red/30 p-6">
+            <h2 className="mb-2 font-semibold text-red">Gagal terhubung ke database</h2>
+            <p className="text-sm text-dim">{galat}</p>
+            <p className="mt-3 text-sm text-dim">
+              Periksa <code className="font-mono text-ink">.env.local</code> dan koneksi internet.
+            </p>
+          </Panel>
+        </div>
+      </>
+    );
+  }
+
+  const nunggak = pelanggan.filter((x) => x.rp_tunggak > 0);
+  const totalTunggak = nunggak.reduce((s, x) => s + x.rp_tunggak, 0);
+  const tanpaHp = pelanggan.filter((x) => !x.no_hp).length;
+  const R = meteran.ringkasan;
+  const persen = R.total ? Math.round((R.terisi / R.total) * 100) : 0;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <>
+      <PageHeader title="Beranda" desc={`Ringkasan periode ${label}`} />
+
+      <div className="flex-1 overflow-y-auto p-7">
+        <div className="flex flex-wrap gap-4">
+          <StatCard label="Pelanggan Aktif" value={pelanggan.length}
+            sub={tanpaHp ? `${tanpaHp} tanpa no HP` : 'semua punya no HP'} />
+          <StatCard label="Menunggak" value={nunggak.length} tone="red" sub={rupiah(totalTunggak)} />
+          <StatCard label={`Meteran ${label}`} value={`${R.terisi}/${R.total}`} tone="green"
+            sub={`${R.kosong} belum diisi`} />
+          <StatCard label="Progres Pencatatan" value={`${persen}%`} tone="primary"
+            sub={R.flat ? `${R.flat} tarif flat dilewati` : null} />
+        </div>
+
+        <Panel className="mt-6 p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">Pencatatan meteran {label}</h2>
+            <Badge tone={persen === 100 ? 'green' : 'amber'}>{persen}% selesai</Badge>
+          </div>
+          <ProgressBar value={persen} />
+          <p className="mt-3 text-sm text-dim">
+            {R.kosong > 0
+              ? <>Masih <b className="text-ink">{R.kosong}</b> pelanggan belum dicatat meterannya.</>
+              : <>Semua meteran periode ini sudah dicatat.</>}
           </p>
+        </Panel>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Tautan href="/meteran" judul="✍️ Input Meteran"
+            desc={`Isi ${R.kosong} meteran yang belum dicatat`} />
+          <Tautan href="/broadcast?mode=tagihan-singkat" judul="📤 Broadcast WA"
+            desc="Kirim pengingat foto meteran atau tagihan" />
+          <Tautan href="/pelanggan" judul="👥 Data Pelanggan"
+            desc="Cari pelanggan & lihat riwayatnya" />
+          <Tautan href="/laporan?tipe=meteran" judul="📊 Laporan"
+            desc="Meteran, belum bayar, sudah bayar" />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        {nunggak.length > 0 && (
+          <Panel className="mt-6">
+            <div className="border-b border-line px-5 py-3.5">
+              <h2 className="text-sm font-semibold">Tunggakan terbesar</h2>
+            </div>
+            <div className="divide-y divide-line">
+              {[...nunggak].sort((a, b) => b.rp_tunggak - a.rp_tunggak).slice(0, 5).map((x) => (
+                <Link key={x.kode} href={`/pelanggan/${x.kode}`}
+                  className="flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-raised">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{x.nama || 'Tanpa Nama'}</div>
+                    <div className="truncate text-xs text-dim">{x.rt} · {x.alamat}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-sm font-bold text-red tnum">{rupiah(x.rp_tunggak)}</div>
+                    <div className="text-xs text-dim">{x.n_tunggak} tagihan</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Panel>
+        )}
+      </div>
+    </>
+  );
+}
+
+function Tautan({ href, judul, desc }) {
+  return (
+    <Link href={href}
+      className="rounded-xl border border-line bg-surface p-4 transition-colors hover:border-dim hover:bg-raised">
+      <div className="text-sm font-semibold">{judul}</div>
+      <div className="mt-1 text-xs leading-snug text-dim">{desc}</div>
+    </Link>
   );
 }
