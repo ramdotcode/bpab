@@ -1,4 +1,4 @@
-import { laporanMeteran, laporanBelumBayar, laporanSudahBayar } from '@/lib/reports';
+import { laporanMeteran, laporanBelumBayar, laporanSudahBayar, laporanPemasukan } from '@/lib/reports';
 import { periodeDefault } from '@/lib/targets';
 import { ok, fail, handler, periodeDariQuery } from '@/lib/api';
 
@@ -8,6 +8,7 @@ const LAPORAN = {
   'meteran': laporanMeteran,
   'belum-bayar': laporanBelumBayar,
   'sudah-bayar': laporanSudahBayar,
+  'pemasukan': laporanPemasukan,
 };
 
 export const GET = handler(async (req, { params }) => {

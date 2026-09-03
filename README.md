@@ -57,7 +57,7 @@ bawah sidebar. Ganti password cukup dengan mengubah `.env.local` lalu restart.
 | `/pelanggan` | Daftar + cari (nama/kode/HP/alamat) + filter RT & penunggak |
 | `/pelanggan/[kode]` | Kartu pelanggan: profil, ringkasan, riwayat tagihan/pembayaran/deposit |
 | `/pelanggan/baru` | **Tambah pelanggan** — rumah → pelanggan → baris tagihan (satu transaksi) |
-| `/laporan` | 3 laporan bulanan + Download Excel |
+| `/laporan` | 4 laporan bulanan + Download Excel |
 | `/broadcast` | Kirim WA: foto meteran, tagihan detail, tagihan singkat |
 
 ## Struktur
@@ -67,7 +67,7 @@ lib/             logika server — dipakai ulang dari versi Express, tidak diuba
   db.js          koneksi MySQL: query() SELECT-only, updateMeteran(), insertTransaksi()
   meter.js       aturan input meteran
   newcustomer.js aturan tambah pelanggan
-  reports.js     3 laporan bulanan
+  reports.js     4 laporan bulanan
   customers.js   daftar & detail pelanggan
   targets.js     target broadcast + helper periode
   messages.js    template pesan WhatsApp
@@ -94,6 +94,11 @@ langsung tanpa lewat HTTP. Halaman interaktif memakai route `/api/*`.
   `pemakaian = akhir − awal`, `total = MAX(pemakaian, 6) × tarif` — minimal 6 m³.
 - **Offset periode:** pada Bulan Laporan X, petugas membaca meteran pemakaian
   bulan X dan menagih pemakaian bulan X−1.
+- **Laporan Pemasukan** berpatokan pada *tanggal bayar*, bukan periode tagihan:
+  semua tagihan lunas yang dibayar di Bulan Laporan X dihitung, lalu dipilah jadi
+  "Bulan ini" (periode X−1), "Tunggakan" (periode lebih lama), dan "Di muka"
+  (periode belum jatuh tempo). Sumbernya `tra_pelanggan_bpab_tagihan`, satu baris
+  per tagihan, sehingga kwitansi yang mencakup beberapa tagihan tetap terpilah benar.
 - **Input meteran tidak membuat baris periode berikutnya** — itu tugas proses
   "buka periode" di aplikasi lama. Dibuktikan lewat diff snapshot seluruh database.
 - **`id_rw` diambil dari `ref_setting_bpab`**, bukan `profile_rw` (di sana ada 3 RW
