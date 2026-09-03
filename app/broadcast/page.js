@@ -6,9 +6,10 @@ import { useToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import {
   PageHeader, Panel, Table, Th, Td, Tr, EmptyState, StatCard,
-  Input, Textarea, Field, Button, Badge, Spinner, ProgressBar, Checkbox,
+  Input, Select, Textarea, Field, Button, Badge, Spinner, ProgressBar, Checkbox,
 } from '@/components/ui';
 import { MODES } from '@/lib/messages';
+import { BULAN } from '@/lib/format';
 
 export default function HalamanBroadcast() {
   return (
@@ -25,7 +26,9 @@ function IsiBroadcast() {
   const cfg = MODES[mode];
 
   const [target, setTarget] = useState([]);
-  const [periode, setPeriode] = useState(null);
+  const [periode, setPeriode] = useState(null);   // periode data yang sedang tampil
+  const [tahun, setTahun] = useState('');         // periode yang dipilih di bilah alat
+  const [bulan, setBulan] = useState('');
   const [memuat, setMemuat] = useState(false);
   const [galat, setGalat] = useState(null);
   const [template, setTemplate] = useState(cfg.template || '');
@@ -43,6 +46,13 @@ function IsiBroadcast() {
   const [progres, setProgres] = useState({ selesai: 0, total: 0, teks: '' });
   const berhenti = useRef(false);
 
+  // Periode berjalan dipakai sebagai nilai awal pemilih bulan/tahun.
+  useEffect(() => {
+    apiGet('/api/periode')
+      .then((p) => { setTahun(p.tahun); setBulan(p.bulan); })
+      .catch((e) => setGalat(e.message));
+  }, []);
+
   // Ganti mode -> reset semuanya
   useEffect(() => {
     setTarget([]);
@@ -58,11 +68,17 @@ function IsiBroadcast() {
     setMemuat(true);
     setGalat(null);
     try {
-      const j = await apiGet(cfg.endpoint);
+      const url = cfg.periodik && tahun && bulan
+        ? `${cfg.endpoint}?tahun=${tahun}&bulan=${bulan}`
+        : cfg.endpoint;
+      const j = await apiGet(url);
+      const label = j.periode?.label || '';
       // `no` disimpan supaya nomor urut baris tetap sama walau daftarnya disaring
-      setTarget((j.targets || []).map((t, i) => ({ ...t, id: `t${i}`, no: i + 1, status: 'pending', pesanKhusus: '' })));
-      if (j.periode) setPeriode(j.periode);
-      catat('info', 'DATABASE', `Memuat ${j.targets.length} target.`);
+      setTarget((j.targets || []).map((t, i) => ({
+        ...t, id: `t${i}`, no: i + 1, status: 'pending', pesanKhusus: '', periodeLabel: label,
+      })));
+      setPeriode(j.periode || null);
+      catat('info', 'DATABASE', `Memuat ${j.targets.length} target${label ? ` periode ${label}` : ''}.`);
       setTab('target');
     } catch (e) {
       setGalat(e.message);
@@ -200,18 +216,27 @@ function IsiBroadcast() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Target_${mode}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const cap = periode ? periode.label.replace(/\s+/g, '-') : new Date().toISOString().slice(0, 10);
+    a.download = `Target_${mode}_${cap}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast('CSV diunduh', 'ok');
   };
+
+  // Daftar di layar berasal dari periode lain -> ingatkan supaya dimuat ulang.
+  const belumDimuat = Boolean(cfg.periodik && periode
+    && (periode.tahun !== tahun || periode.bulan !== bulan));
 
   const persen = progres.total ? Math.round((progres.selesai / progres.total) * 100) : 0;
 
   return (
     <>
       <PageHeader title={cfg.label.replace(/^\S+\s/, 'Broadcast: ')} desc={cfg.desc}>
-        {periode && <Badge tone="primary">{periode.label}</Badge>}
+        {periode && (
+          <Badge tone={belumDimuat ? 'amber' : 'primary'}>
+            {belumDimuat ? `Data: ${periode.label} (belum dimuat ulang)` : periode.label}
+          </Badge>
+        )}
         <Button variant="outline" onClick={unduhCsv} disabled={target.length === 0}>Export CSV</Button>
         <Button variant="green" onClick={muat} disabled={memuat}>
           {memuat ? <><Spinner /> Memuat...</> : '⟳ Muat Data dari Database'}
@@ -220,6 +245,22 @@ function IsiBroadcast() {
 
       {/* Pengaturan */}
       <div className="flex flex-wrap items-start gap-5 border-b border-line bg-surface px-7 py-4">
+        {cfg.periodik && (
+          <Field label="Periode Meteran"
+            hint={belumDimuat
+              ? 'Klik "Muat Data" untuk menarik target periode ini.'
+              : 'Pilih bulan lalu untuk mengejar yang belum kirim foto.'}>
+            <div className="flex items-center gap-2">
+              <Select value={bulan} onChange={(e) => setBulan(e.target.value)} className="w-36">
+                {BULAN.slice(1).map((b, i) => (
+                  <option key={b} value={String(i + 1).padStart(2, '0')}>{b}</option>
+                ))}
+              </Select>
+              <Input type="number" value={tahun} onChange={(e) => setTahun(e.target.value)} className="w-24" />
+            </div>
+          </Field>
+        )}
+
         <Field label="Jeda Pengiriman (detik)" hint="Jeda acak mencegah blokir WhatsApp.">
           <div className="flex items-center gap-2">
             <Input type="number" value={jedaMin} onChange={(e) => setJedaMin(e.target.value)} className="w-20 text-center" />
@@ -230,7 +271,7 @@ function IsiBroadcast() {
 
         {cfg.editable && (
           <Field label="Template Pesan" className="min-w-72 flex-1"
-            hint="Variabel: {nama}, {id}, {alamat}, {no_hp}">
+            hint="Variabel: {nama}, {id}, {alamat}, {no_hp}, {periode}">
             <Textarea value={template} onChange={(e) => setTemplate(e.target.value)} className="min-h-24 font-mono text-xs" />
           </Field>
         )}
