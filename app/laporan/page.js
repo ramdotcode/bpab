@@ -26,7 +26,8 @@ const KOLOM = {
     ['No', 'no', 'int'], ['Kode', 'kode', 'teks'], ['Nama Pelanggan', 'nama', 'teks'],
     ['RT', 'rt', 'teks'], ['Alamat Rumah', 'alamat', 'teks'],
     ['Awal', 'awal', 'int'], ['Akhir', 'akhir', 'int'], ['Pemakaian', 'pemakaian', 'int'],
-    ['Tgl Bayar', 'tgl_bayar', 'tanggal'], ['Pembayaran', 'pembayaran', 'rp'], ['Cara Bayar', 'cara', 'teks'],
+    ['Tagihan', 'tagihan', 'rp'], ['Tgl Bayar', 'tgl_bayar', 'tanggal'], ['Pembayaran', 'pembayaran', 'rp'],
+    ['Cara Bayar', 'cara', 'teks'], ['Status', 'status_label', 'status'], ['Keterangan', 'keterangan', 'teks'],
   ],
   'pemasukan': [
     ['No', 'no', 'int'], ['Tgl Bayar', 'tgl_bayar', 'tanggal'], ['Kode', 'kode', 'teks'],
@@ -65,9 +66,20 @@ const KATEGORI = [
 ];
 const TONE_KATEGORI = Object.fromEntries(KATEGORI.map((k) => [k.id, k.tone || 'netral']));
 
+// Status pembayaran di laporan Sudah Bayar (urutan = urutan ringkasan).
+const STATUS = [
+  { id: 'tepat-waktu', label: 'Tepat waktu', tone: 'green' },
+  { id: 'terlambat', label: 'Terlambat', tone: 'amber' },
+  { id: 'belum', label: 'Belum bayar', tone: 'red' },
+  { id: 'lebih-awal', label: 'Lebih awal', tone: 'primary' },
+  { id: 'lain', label: 'Lunas, tgl kosong', tone: 'netral' },
+];
+const TONE_STATUS = Object.fromEntries(STATUS.map((s) => [s.id, s.tone]));
+
 const HINT_BULAN = {
   'pemasukan': 'Uang yang diterima (tanggal bayar) dalam bulan ini, apa pun periode tagihannya.',
   'bayar-tunggakan': 'Dibayar bulan ini untuk tagihan bulan-bulan lama — yang tidak masuk laporan Sudah Bayar.',
+  'sudah-bayar': 'Tagihan pemakaian bulan lalu. TOTAL hanya yang bayar tepat waktu (dibayar di bulan ini).',
   'default': 'Meteran = bulan ini; pembayaran/tunggakan = bulan sebelumnya.',
 };
 
@@ -136,6 +148,7 @@ function IsiLaporan() {
     if (jenis === 'rp') return angka(v);
     if (jenis === 'tanggal') return tanggal(v);
     if (jenis === 'kategori') return <Badge tone={TONE_KATEGORI[row.kategori]}>{v}</Badge>;
+    if (jenis === 'status') return <Badge tone={TONE_STATUS[row.status]}>{v}</Badge>;
     return String(v);
   };
 
@@ -171,6 +184,15 @@ function IsiLaporan() {
         }
         aoa.push(['Total pemasukan', '', '', lap.rows.length, R.total]);
       }
+      // Sudah bayar: jumlah per status; TOTAL di atas hanya yang tepat waktu.
+      if (tipe === 'sudah-bayar' && lap.ringkasan) {
+        const R = lap.ringkasan;
+        aoa.push([]);
+        aoa.push(['RINGKASAN', '', '', 'Jumlah', 'Rupiah']);
+        for (const s of STATUS) {
+          if (R[s.id].n) aoa.push([s.id === 'belum' ? 'Belum bayar (sisa tagihan)' : s.label, '', '', R[s.id].n, R[s.id].rp]);
+        }
+      }
       // Bayar tunggakan: rincian per periode tagihan yang dilunasi.
       if (tipe === 'bayar-tunggakan' && lap.ringkasan) {
         const R = lap.ringkasan;
@@ -192,6 +214,7 @@ function IsiLaporan() {
 
   const R = tipe === 'pemasukan' ? lap?.ringkasan : null;
   const T = tipe === 'bayar-tunggakan' ? lap?.ringkasan : null;
+  const S = tipe === 'sudah-bayar' ? lap?.ringkasan : null;
 
   return (
     <>
@@ -261,6 +284,21 @@ function IsiLaporan() {
             {R['di-muka'].n > 0 && (
               <StatCard label="Dibayar Di Muka" value={rupiah(R['di-muka'].rp)} tone="dim"
                 sub={`${R['di-muka'].n} tagihan belum jatuh tempo`} />
+            )}
+          </div>
+        )}
+
+        {S && !memuat && (
+          <div className="mb-5 flex flex-wrap gap-4">
+            <StatCard label="Bayar Tepat Waktu" value={rupiah(S['tepat-waktu'].rp)} tone="green"
+              sub={`${S['tepat-waktu'].n} pelanggan · dibayar ${lap.periode.label}`} />
+            <StatCard label="Bayar Terlambat" value={rupiah(S['terlambat'].rp)} tone="primary"
+              sub={`${S['terlambat'].n} pelanggan · dibayar setelah ${lap.periode.label}`} />
+            <StatCard label="Belum Bayar" value={rupiah(S['belum'].rp)} tone="red"
+              sub={`${S['belum'].n} pelanggan`} />
+            {S['lebih-awal'].n > 0 && (
+              <StatCard label="Bayar Lebih Awal" value={rupiah(S['lebih-awal'].rp)} tone="dim"
+                sub={`${S['lebih-awal'].n} pelanggan · dibayar sebelum ${lap.periode.label}`} />
             )}
           </div>
         )}

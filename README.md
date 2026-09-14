@@ -99,6 +99,11 @@ langsung tanpa lewat HTTP. Halaman interaktif memakai route `/api/*`.
   "Bulan ini" (periode X−1), "Tunggakan" (periode lebih lama), dan "Di muka"
   (periode belum jatuh tempo). Sumbernya `tra_pelanggan_bpab_tagihan`, satu baris
   per tagihan, sehingga kwitansi yang mencakup beberapa tagihan tetap terpilah benar.
+- **Laporan Sudah Bayar** menghitung "sudah bayar" = dibayar **tepat waktu**, yaitu
+  tanggal bayar jatuh di Bulan Laporan. Tagihan yang dilunasi belakangan tetap tampil
+  dengan status "Terlambat" + keterangan bulan bayarnya, tapi tidak ikut TOTAL (uangnya
+  tercatat sebagai tunggakan di Pemasukan bulan pembayarannya). TOTAL Sudah Bayar =
+  kategori "Bulan ini" di Pemasukan, meskipun laporan dibuka berbulan-bulan kemudian.
 - **Laporan Bayar Tunggakan** menutup celah laporan "Sudah Bayar": Sudah Bayar hanya
   memuat periode X−1, jadi pelanggan yang melunasi 2 bulan atau lebih sekaligus tidak
   pernah tercatat untuk bulan-bulan lamanya. Laporan ini memuat tagihan yang dibayar
