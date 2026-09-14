@@ -57,7 +57,7 @@ bawah sidebar. Ganti password cukup dengan mengubah `.env.local` lalu restart.
 | `/pelanggan` | Daftar + cari (nama/kode/HP/alamat) + filter RT & penunggak |
 | `/pelanggan/[kode]` | Kartu pelanggan: profil, ringkasan, riwayat tagihan/pembayaran/deposit |
 | `/pelanggan/baru` | **Tambah pelanggan** — rumah → pelanggan → baris tagihan (satu transaksi) |
-| `/laporan` | 4 laporan bulanan + Download Excel |
+| `/laporan` | 5 laporan bulanan + Download Excel |
 | `/broadcast` | Kirim WA: foto meteran, tagihan detail, tagihan singkat |
 
 ## Struktur
@@ -67,7 +67,7 @@ lib/             logika server — dipakai ulang dari versi Express, tidak diuba
   db.js          koneksi MySQL: query() SELECT-only, updateMeteran(), insertTransaksi()
   meter.js       aturan input meteran
   newcustomer.js aturan tambah pelanggan
-  reports.js     4 laporan bulanan
+  reports.js     5 laporan bulanan
   customers.js   daftar & detail pelanggan
   targets.js     target broadcast + helper periode
   messages.js    template pesan WhatsApp
@@ -99,6 +99,11 @@ langsung tanpa lewat HTTP. Halaman interaktif memakai route `/api/*`.
   "Bulan ini" (periode X−1), "Tunggakan" (periode lebih lama), dan "Di muka"
   (periode belum jatuh tempo). Sumbernya `tra_pelanggan_bpab_tagihan`, satu baris
   per tagihan, sehingga kwitansi yang mencakup beberapa tagihan tetap terpilah benar.
+- **Laporan Bayar Tunggakan** menutup celah laporan "Sudah Bayar": Sudah Bayar hanya
+  memuat periode X−1, jadi pelanggan yang melunasi 2 bulan atau lebih sekaligus tidak
+  pernah tercatat untuk bulan-bulan lamanya. Laporan ini memuat tagihan yang dibayar
+  di Bulan Laporan X untuk periode sebelum X−1, plus rincian per periode di Excel.
+  Sudah Bayar + Bayar Tunggakan = semua yang dilunasi bulan itu (kecuali bayar di muka).
 - **Input meteran tidak membuat baris periode berikutnya** — itu tugas proses
   "buka periode" di aplikasi lama. Dibuktikan lewat diff snapshot seluruh database.
 - **`id_rw` diambil dari `ref_setting_bpab`**, bukan `profile_rw` (di sana ada 3 RW

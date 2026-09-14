@@ -35,15 +35,26 @@ const KOLOM = {
     ['Tagihan', 'total', 'rp'], ['Pembayaran', 'pembayaran', 'rp'],
     ['Cara Bayar', 'cara', 'teks'], ['Kwitansi', 'kwitansi', 'teks'],
   ],
+  'bayar-tunggakan': [
+    ['No', 'no', 'int'], ['Tgl Bayar', 'tgl_bayar', 'tanggal'], ['Kode', 'kode', 'teks'],
+    ['Nama Pelanggan', 'nama', 'teks'], ['RT', 'rt', 'teks'], ['Alamat Rumah', 'alamat', 'teks'],
+    ['Periode Tagihan', 'periode', 'teks'],
+    ['Awal', 'awal', 'int'], ['Akhir', 'akhir', 'int'], ['Pemakaian', 'pemakaian', 'int'],
+    ['Tagihan', 'total', 'rp'], ['Pembayaran', 'pembayaran', 'rp'],
+    ['Cara Bayar', 'cara', 'teks'], ['Kwitansi', 'kwitansi', 'teks'],
+  ],
 };
 // Kolom tempat baris TOTAL diletakkan
-const KOLOM_TOTAL = { 'belum-bayar': 'total', 'sudah-bayar': 'pembayaran', 'pemasukan': 'pembayaran' };
+const KOLOM_TOTAL = {
+  'belum-bayar': 'total', 'sudah-bayar': 'pembayaran', 'pemasukan': 'pembayaran', 'bayar-tunggakan': 'pembayaran',
+};
 
 const JENIS = [
   { id: 'meteran', label: '📋 Meteran' },
   { id: 'belum-bayar', label: '🔴 Belum Bayar' },
   { id: 'sudah-bayar', label: '🟢 Sudah Bayar' },
   { id: 'pemasukan', label: '💵 Pemasukan' },
+  { id: 'bayar-tunggakan', label: '🟠 Bayar Tunggakan' },
 ];
 
 const KATEGORI = [
@@ -56,6 +67,7 @@ const TONE_KATEGORI = Object.fromEntries(KATEGORI.map((k) => [k.id, k.tone || 'n
 
 const HINT_BULAN = {
   'pemasukan': 'Uang yang diterima (tanggal bayar) dalam bulan ini, apa pun periode tagihannya.',
+  'bayar-tunggakan': 'Dibayar bulan ini untuk tagihan bulan-bulan lama — yang tidak masuk laporan Sudah Bayar.',
   'default': 'Meteran = bulan ini; pembayaran/tunggakan = bulan sebelumnya.',
 };
 
@@ -159,6 +171,14 @@ function IsiLaporan() {
         }
         aoa.push(['Total pemasukan', '', '', lap.rows.length, R.total]);
       }
+      // Bayar tunggakan: rincian per periode tagihan yang dilunasi.
+      if (tipe === 'bayar-tunggakan' && lap.ringkasan) {
+        const R = lap.ringkasan;
+        aoa.push([]);
+        aoa.push(['RINCIAN PER PERIODE TAGIHAN', '', '', 'Jumlah', 'Rupiah']);
+        for (const p of R.perPeriode) aoa.push([p.periode, '', '', p.n, p.rp]);
+        aoa.push([`Total (${R.pelanggan} pelanggan)`, '', '', R.tagihan, R.total]);
+      }
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = kolom.map(([l]) => ({ wch: Math.max(10, l.length + 4) }));
       const wb = XLSX.utils.book_new();
@@ -171,6 +191,7 @@ function IsiLaporan() {
   };
 
   const R = tipe === 'pemasukan' ? lap?.ringkasan : null;
+  const T = tipe === 'bayar-tunggakan' ? lap?.ringkasan : null;
 
   return (
     <>
@@ -181,7 +202,7 @@ function IsiLaporan() {
 
       <div className="flex flex-wrap items-end gap-3 border-b border-line bg-surface px-7 py-4">
         <Field label="Jenis Laporan">
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {JENIS.map((j) => (
               <Button key={j.id}
                 variant={tipe === j.id ? 'primary' : 'outline'}
@@ -220,7 +241,8 @@ function IsiLaporan() {
 
         {lap?.periode?.pemakaian && (
           <Badge tone="primary" className="mb-2.5">
-            {tipe === 'pemasukan' ? 'Ditagih bulan ini: pemakaian ' : 'Pemakaian '}{lap.periode.pemakaian}
+            {tipe === 'pemasukan' ? 'Ditagih bulan ini: pemakaian '
+              : tipe === 'bayar-tunggakan' ? 'Periode sebelum ' : 'Pemakaian '}{lap.periode.pemakaian}
           </Badge>
         )}
       </div>
@@ -240,6 +262,17 @@ function IsiLaporan() {
               <StatCard label="Dibayar Di Muka" value={rupiah(R['di-muka'].rp)} tone="dim"
                 sub={`${R['di-muka'].n} tagihan belum jatuh tempo`} />
             )}
+          </div>
+        )}
+
+        {T && !memuat && (
+          <div className="mb-5 flex flex-wrap gap-4">
+            <StatCard label="Total Bayar Tunggakan" value={rupiah(T.total)} tone="green"
+              sub={`${T.tagihan} tagihan · ${T.pelanggan} pelanggan${T.denda ? ` · termasuk denda ${rupiah(T.denda)}` : ''}`} />
+            {T.perPeriode.map((p) => (
+              <StatCard key={p.periode_kode} label={`Periode ${p.periode}`} value={rupiah(p.rp)} tone="primary"
+                sub={`${p.n} tagihan`} />
+            ))}
           </div>
         )}
 

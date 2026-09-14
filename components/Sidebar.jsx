@@ -32,6 +32,7 @@ const MENU = [
       { href: '/laporan?tipe=belum-bayar', label: '🔴 Belum Bayar', cocok: '/laporan' },
       { href: '/laporan?tipe=sudah-bayar', label: '🟢 Sudah Bayar', cocok: '/laporan' },
       { href: '/laporan?tipe=pemasukan', label: '💵 Pemasukan', cocok: '/laporan' },
+      { href: '/laporan?tipe=bayar-tunggakan', label: '🟠 Bayar Tunggakan', cocok: '/laporan' },
     ],
   },
 ];
