@@ -8,6 +8,7 @@ import {
   Input, Select, Field, Button, Badge, Spinner, StatCard,
 } from '@/components/ui';
 import { angka, rupiah, tanggal, BULAN } from '@/lib/format';
+import { susunSheet } from '@/lib/excel';
 
 // Definisi kolom per jenis laporan — sekaligus dipakai untuk export Excel.
 const KOLOM = {
@@ -64,10 +65,6 @@ const KATEGORI = [
   { id: 'tunggakan', label: 'Tunggakan', tone: 'amber' },
   { id: 'di-muka', label: 'Di muka', tone: 'primary' },
 ];
-// Titik pemisah ribuan dipaksa lewat format (tidak tergantung setelan bahasa Excel):
-// 60000 -> 60.000, 1234567 -> 1.234.567.
-const FORMAT_RUPIAH = '[>=1000000]#"."###"."###;[>=1000]#"."###;0';
-
 const TONE_KATEGORI = Object.fromEntries(KATEGORI.map((k) => [k.id, k.tone || 'netral']));
 
 // Status pembayaran di laporan Sudah Bayar (urutan = urutan ringkasan).
@@ -159,63 +156,30 @@ function IsiLaporan() {
   const unduhExcel = async () => {
     if (!lap) return;
     try {
-      const XLSX = await import('xlsx');
+      const XLSX = await import('xlsx-js-style');   // SheetJS + dukungan gaya (tebal, garis)
       const judul = tipe === 'pemasukan' && kategori !== 'semua'
         ? `${lap.judul} (${KATEGORI.find((k) => k.id === kategori)?.label})`
         : lap.judul;
-      const aoa = [[judul], kolom.map(([l]) => l)];
-      for (const row of baris) {
-        aoa.push(kolom.map(([, key, jenis]) => {
-          const v = row[key];
-          if (v === null || v === undefined || v === '') return '';
-          return (jenis === 'rp' || jenis === 'int') ? Number(v) : v;
-        }));
+      // Ringkasan di bawah tabel, per jenis laporan.
+      const HEAD = ['RINGKASAN', '', '', 'Jumlah', 'Rupiah'];
+      const R = lap.ringkasan;
+      let ringkasan = null;
+      if (tipe === 'pemasukan' && R) {
+        ringkasan = { header: HEAD, rows: [
+          ...KATEGORI.slice(1).map((k) => [k.label, '', '', R[k.id].n, R[k.id].rp]),
+          ['Total pemasukan', '', '', lap.rows.length, R.total],
+        ] };
+      } else if (tipe === 'sudah-bayar' && R) {
+        // TOTAL tabel hanya yang tepat waktu; ringkasan menampilkan semua status.
+        ringkasan = { header: HEAD, rows: STATUS.filter((s) => R[s.id].n).map((s) =>
+          [s.id === 'belum' ? 'Belum bayar (sisa tagihan)' : s.label, '', '', R[s.id].n, R[s.id].rp]) };
+      } else if (tipe === 'bayar-tunggakan' && R) {
+        ringkasan = { header: ['RINCIAN PER PERIODE TAGIHAN', '', '', 'Jumlah', 'Rupiah'], rows: [
+          ...R.perPeriode.map((p) => [p.periode, '', '', p.n, p.rp]),
+          [`Total (${R.pelanggan} pelanggan)`, '', '', R.tagihan, R.total],
+        ] };
       }
-      if (totKey && total !== undefined) {
-        const i = kolom.findIndex(([, k]) => k === totKey);
-        const b = kolom.map(() => '');
-        if (i > 0) b[i - 1] = 'TOTAL';
-        b[i] = Number(total);
-        aoa.push(b);
-      }
-      const barisRingkasan = aoa.length;   // blok ringkasan: kolom ke-5 (index 4) = Rupiah
-      // Ringkasan pemasukan ikut ditulis di bawah tabel.
-      if (tipe === 'pemasukan' && lap.ringkasan) {
-        const R = lap.ringkasan;
-        aoa.push([]);
-        aoa.push(['RINGKASAN', '', '', 'Jumlah', 'Rupiah']);
-        for (const k of KATEGORI.slice(1)) {
-          aoa.push([k.label, '', '', R[k.id].n, R[k.id].rp]);
-        }
-        aoa.push(['Total pemasukan', '', '', lap.rows.length, R.total]);
-      }
-      // Sudah bayar: jumlah per status; TOTAL di atas hanya yang tepat waktu.
-      if (tipe === 'sudah-bayar' && lap.ringkasan) {
-        const R = lap.ringkasan;
-        aoa.push([]);
-        aoa.push(['RINGKASAN', '', '', 'Jumlah', 'Rupiah']);
-        for (const s of STATUS) {
-          if (R[s.id].n) aoa.push([s.id === 'belum' ? 'Belum bayar (sisa tagihan)' : s.label, '', '', R[s.id].n, R[s.id].rp]);
-        }
-      }
-      // Bayar tunggakan: rincian per periode tagihan yang dilunasi.
-      if (tipe === 'bayar-tunggakan' && lap.ringkasan) {
-        const R = lap.ringkasan;
-        aoa.push([]);
-        aoa.push(['RINCIAN PER PERIODE TAGIHAN', '', '', 'Jumlah', 'Rupiah']);
-        for (const p of R.perPeriode) aoa.push([p.periode, '', '', p.n, p.rp]);
-        aoa.push([`Total (${R.pelanggan} pelanggan)`, '', '', R.tagihan, R.total]);
-      }
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      // Format uang pakai titik ribuan, tetap berupa angka (bisa dijumlah di Excel).
-      const formatUang = (r, c) => {
-        const sel = ws[XLSX.utils.encode_cell({ r, c })];
-        if (sel && sel.t === 'n') sel.z = FORMAT_RUPIAH;
-      };
-      const kolomUang = kolom.map(([, , jenis], c) => (jenis === 'rp' ? c : -1)).filter((c) => c >= 0);
-      for (let r = 2; r < barisRingkasan; r++) kolomUang.forEach((c) => formatUang(r, c));
-      for (let r = barisRingkasan; r < aoa.length; r++) formatUang(r, 4);
-      ws['!cols'] = kolom.map(([l]) => ({ wch: Math.max(10, l.length + 4) }));
+      const ws = susunSheet(XLSX, { judul, kolom, baris, totKey, total, ringkasan });
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
       XLSX.writeFile(wb, `${judul.replace(/[\\/:*?"<>|]/g, '-')}.xlsx`);
