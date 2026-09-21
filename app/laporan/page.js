@@ -64,6 +64,10 @@ const KATEGORI = [
   { id: 'tunggakan', label: 'Tunggakan', tone: 'amber' },
   { id: 'di-muka', label: 'Di muka', tone: 'primary' },
 ];
+// Titik pemisah ribuan dipaksa lewat format (tidak tergantung setelan bahasa Excel):
+// 60000 -> 60.000, 1234567 -> 1.234.567.
+const FORMAT_RUPIAH = '[>=1000000]#"."###"."###;[>=1000]#"."###;0';
+
 const TONE_KATEGORI = Object.fromEntries(KATEGORI.map((k) => [k.id, k.tone || 'netral']));
 
 // Status pembayaran di laporan Sudah Bayar (urutan = urutan ringkasan).
@@ -174,6 +178,7 @@ function IsiLaporan() {
         b[i] = Number(total);
         aoa.push(b);
       }
+      const barisRingkasan = aoa.length;   // blok ringkasan: kolom ke-5 (index 4) = Rupiah
       // Ringkasan pemasukan ikut ditulis di bawah tabel.
       if (tipe === 'pemasukan' && lap.ringkasan) {
         const R = lap.ringkasan;
@@ -202,6 +207,14 @@ function IsiLaporan() {
         aoa.push([`Total (${R.pelanggan} pelanggan)`, '', '', R.tagihan, R.total]);
       }
       const ws = XLSX.utils.aoa_to_sheet(aoa);
+      // Format uang pakai titik ribuan, tetap berupa angka (bisa dijumlah di Excel).
+      const formatUang = (r, c) => {
+        const sel = ws[XLSX.utils.encode_cell({ r, c })];
+        if (sel && sel.t === 'n') sel.z = FORMAT_RUPIAH;
+      };
+      const kolomUang = kolom.map(([, , jenis], c) => (jenis === 'rp' ? c : -1)).filter((c) => c >= 0);
+      for (let r = 2; r < barisRingkasan; r++) kolomUang.forEach((c) => formatUang(r, c));
+      for (let r = barisRingkasan; r < aoa.length; r++) formatUang(r, 4);
       ws['!cols'] = kolom.map(([l]) => ({ wch: Math.max(10, l.length + 4) }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
