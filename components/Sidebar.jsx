@@ -155,7 +155,7 @@ function StatusDevice() {
           detail: 'Perangkat terdaftar di Whacenter, tapi WhatsApp-nya sedang putus — scan ulang QR atau cek HP-nya.',
         });
       } else {
-        setStatus({ keadaan: 'gagal', teks: j.message || 'Gagal cek device', detail: j.message || '' });
+        setStatus({ keadaan: 'gagal', teks: j.message || 'Gagal cek device', detail: '' });
       }
     } catch (e) {
       setStatus({ keadaan: 'gagal', teks: 'Tidak bisa menghubungi server', detail: e.message });
