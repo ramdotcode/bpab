@@ -75,7 +75,7 @@ lib/             logika server — dipakai ulang dari versi Express, tidak diuba
   auth.js        token sesi login (HMAC, Web Crypto)
 proxy.js         penjaga rute: wajib login kecuali /login & /api/auth
   format.js      format angka & tanggal
-app/api/         13 route handler (pembungkus tipis di atas lib/)
+app/api/         14 route handler (pembungkus tipis di atas lib/)
 app/             halaman
 components/      ui.jsx (tombol, tabel, badge, dll), Sidebar, Modal, Toast
 hooks/useApi.js  pembantu fetch
@@ -109,6 +109,12 @@ langsung tanpa lewat HTTP. Halaman interaktif memakai route `/api/*`.
   pernah tercatat untuk bulan-bulan lamanya. Laporan ini memuat tagihan yang dibayar
   di Bulan Laporan X untuk periode sebelum X−1, plus rincian per periode di Excel.
   Sudah Bayar + Bayar Tunggakan = semua yang dilunasi bulan itu (kecuali bayar di muka).
+- **Ganti meteran** (tombol 🔄 di halaman input meteran) memutus rantai meteran dengan
+  sengaja: `meteran_awal` dimulai dari 0 lagi (atau angka awal meteran baru), pemakaian &
+  tagihan dihitung ulang, dan barisnya ditandai `ganti_meteran='Y'` supaya tidak terus
+  dilaporkan sebagai rantai putus. Mengikuti pola baris ganti meteran yang sudah ada di
+  database. Beda dengan **Koreksi awal**, yang justru menyambung rantai (awal = akhir bulan
+  lalu). Keduanya hanya untuk tagihan belum lunas.
 - **Input meteran tidak membuat baris periode berikutnya** — itu tugas proses
   "buka periode" di aplikasi lama. Dibuktikan lewat diff snapshot seluruh database.
 - **`id_rw` diambil dari `ref_setting_bpab`**, bukan `profile_rw` (di sana ada 3 RW

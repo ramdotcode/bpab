@@ -27,6 +27,8 @@ export default function HalamanMeteran() {
   const [konfirmasi, setKonfirmasi] = useState(null);
   const [pratinjau, setPratinjau] = useState(null);
   const [koreksi, setKoreksi] = useState(null);     // baris yang mau dikoreksi awalnya
+  const [ganti, setGanti] = useState(null);         // baris yang meterannya diganti fisik
+  const [gantiAwal, setGantiAwal] = useState('0');  // angka awal meteran baru
   const [lanjutan, setLanjutan] = useState(null);   // periode berikutnya yang ikut perlu dibetulkan
   const [filterTanda, setFilterTanda] = useState('');   // '' | 'rantai' | 'diam'
   const [perkiraan, setPerkiraan] = useState(() => new Set()); // baris yang diisi otomatis
@@ -227,6 +229,51 @@ export default function HalamanMeteran() {
     }
   };
 
+  // ---- ganti meteran fisik: meteran awal mulai dari 0 lagi ----
+  const mintaGanti = (r) => { setGantiAwal('0'); setGanti(r); };
+
+  const jalankanGanti = async () => {
+    const r = ganti;
+    const awalBaru = gantiAwal.trim() === '' ? 0 : Number(gantiAwal);
+    if (!Number.isInteger(awalBaru) || awalBaru < 0) {
+      return toast('Angka awal meteran baru harus bilangan bulat 0 atau lebih.', 'gagal');
+    }
+    setGanti(null);
+    const id = idBaris(r);
+    setStatus((s) => ({ ...s, [id]: 'simpan' }));
+    try {
+      const { hasil } = await apiPost('/api/meteran/ganti', {
+        kode: r.kode, tahun: data.periode.tahun, bulan: data.periode.bulan,
+        urutan: r.urutan, awalBaru, simulasi,
+      });
+      setStatus((s) => ({ ...s, [id]: null }));
+      // mode simulasi: tampilkan SQL-nya saja (awal yang dipakai = angka barunya)
+      if (!hasil.ditulis) return setPratinjau({ ...hasil, awal: hasil.awal_baru });
+
+      setData((d) => ({
+        ...d,
+        rows: d.rows.map((x) => idBaris(x) === id
+          ? {
+            ...x, awal: hasil.awal_baru, ganti_meteran: true, rantai_putus: false,
+            pemakaian: hasil.pemakaian, total: hasil.total,
+          }
+          : x),
+        ringkasan: r.rantai_putus
+          ? { ...d.ringkasan, rantai_putus: Math.max(0, d.ringkasan.rantai_putus - 1) }
+          : d.ringkasan,
+      }));
+      toast(`Meteran ${hasil.nama} diganti — awal ${hasil.awal_lama} → ${hasil.awal_baru}`, 'ok');
+      if (hasil.perlu_koreksi_lanjutan) {
+        setLanjutan({ ...hasil.perlu_koreksi_lanjutan, kode: r.kode, nama: hasil.nama, urutan: r.urutan });
+      } else {
+        setTimeout(() => inputRef.current[id]?.focus(), 60);
+      }
+    } catch (e) {
+      setStatus((s) => ({ ...s, [id]: null }));
+      toast(e.message, 'gagal');
+    }
+  };
+
   // Perbaiki meteran awal periode BERIKUTNYA (bisa berantai ke bulan setelahnya).
   const perbaikiLanjutan = async () => {
     const L = lanjutan;
@@ -411,6 +458,11 @@ export default function HalamanMeteran() {
                   <Td>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{r.nama || <i className="text-dim">Tanpa Nama</i>}</span>
+                      {r.ganti_meteran && (
+                        <Badge tone="green" title="Meteran diganti — angka awal mulai dari baru">
+                          🔄 Ganti meteran
+                        </Badge>
+                      )}
                       {r.bulan_diam >= (data.batas_diam ?? 3) && (
                         <Badge tone="primary"
                           title={`Pemakaian nol ${r.bulan_diam} bulan berturut-turut — cek meteran fisiknya`}>
@@ -487,6 +539,16 @@ export default function HalamanMeteran() {
                       >
                         📈
                       </a>
+
+                      {!r.lunas && (
+                        <button
+                          onClick={() => mintaGanti(r)}
+                          title={`Meteran ${r.nama} diganti — meteran awal mulai dari 0 lagi`}
+                          className="shrink-0 cursor-pointer rounded-md border border-line px-2 py-1.5 text-xs text-dim transition-colors hover:border-primary hover:text-primary"
+                        >
+                          🔄
+                        </button>
+                      )}
 
                       {st === 'simpan' ? (
                         <span className="text-xs text-dim"><Spinner className="mr-1.5 align-middle" />menyimpan</span>
@@ -589,6 +651,48 @@ export default function HalamanMeteran() {
             <p className="mt-4 text-xs text-dim">
               Hanya kolom meteran awal yang diubah. Kolom pembayaran tidak tersentuh,
               dan baris yang sudah lunas tidak bisa dikoreksi dari sini.
+            </p>
+          </>
+        )}
+      </Modal>
+
+      {/* Ganti meteran fisik — meteran awal mulai dari 0 lagi */}
+      <Modal
+        buka={Boolean(ganti)}
+        tutup={() => setGanti(null)}
+        judul="Ganti meteran?"
+        labelUtama="Ya, ganti meteran"
+        labelBatal="Batal"
+        varianUtama="primary"
+        aksiUtama={jalankanGanti}
+      >
+        {ganti && (
+          <>
+            <p className="mb-4 text-dim">
+              Dipakai kalau meteran <b className="text-ink">{ganti.nama}</b> diganti fisik, sehingga
+              angkanya mulai dari 0 lagi. Meteran awal periode ini diubah, dan barisnya ditandai
+              “ganti meteran” supaya tidak lagi dianggap rantai putus.
+            </p>
+            <dl className="grid grid-cols-[11rem_1fr] gap-y-2">
+              <dt className="text-dim">Periode</dt><dd>{data.periode.label}</dd>
+              <dt className="text-dim">Awal sekarang</dt>
+              <dd className="font-mono">{angka(ganti.awal)}</dd>
+            </dl>
+            <Field label="Angka awal meteran baru" className="mt-4 max-w-48"
+              hint="Biasanya 0. Isi angka lain kalau meteran barunya tidak mulai dari 0.">
+              <Input type="number" inputMode="numeric" value={gantiAwal} autoFocus
+                onChange={(e) => setGantiAwal(e.target.value)} className="text-right" />
+            </Field>
+            {ganti.akhir > 0 && (
+              <p className="mt-4 text-xs text-amber">
+                Meteran akhir sudah terisi ({angka(ganti.akhir)}) — pemakaian &amp; tagihannya akan
+                dihitung ulang dari angka awal yang baru. Kalau angka itu dari meteran lama,
+                perbarui dulu setelah ini.
+              </p>
+            )}
+            <p className="mt-4 text-xs text-dim">
+              Sisa pemakaian meteran lama tidak ikut dihitung di sini. Kolom pembayaran tidak
+              tersentuh, dan baris yang sudah lunas tidak bisa diubah dari sini.
             </p>
           </>
         )}
