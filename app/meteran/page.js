@@ -377,7 +377,7 @@ export default function HalamanMeteran() {
               <Th>Nama / Alamat</Th>
               <Th className="w-20">RT</Th>
               <Th className="w-24" align="right">Awal</Th>
-              <Th className="w-32">Meteran Akhir</Th>
+              <Th className="w-44">Meteran Akhir</Th>
               <Th className="w-28" align="right">Pemakaian</Th>
               <Th className="w-32" align="right">Tagihan</Th>
               <Th className="w-44">Aksi</Th>
@@ -449,7 +449,8 @@ export default function HalamanMeteran() {
                           if (e.key === 'Enter') { e.preventDefault(); mintaSimpan(r, true); }
                         }}
                         placeholder="—"
-                        className={`text-right ${h?.invalid ? 'border-red' : h ? 'border-green' : ''}`}
+                        // min-w: cukup untuk 5 digit + padding, biar angkanya tidak terpotong
+                        className={`min-w-[5.5rem] px-2.5 text-right tnum ${h?.invalid ? 'border-red' : h ? 'border-green' : ''}`}
                       />
                       {bisaOtomatis(r) && !terkunci && (
                         <button
