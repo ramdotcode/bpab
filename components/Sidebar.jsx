@@ -134,6 +134,8 @@ export default function Sidebar({ children }) {
 function StatusDevice() {
   const [status, setStatus] = useState({ keadaan: 'belum', teks: 'Device belum dicek' });
 
+  // Sebabnya dibedakan supaya jelas: salah setelan server, Whacenter tak terjangkau,
+  // atau WA-nya yang memang terputus.
   const cek = async () => {
     setStatus({ keadaan: 'cek', teks: 'Mengecek...' });
     try {
@@ -141,12 +143,22 @@ function StatusDevice() {
       const j = await r.json();
       const d = j.data || {};
       if (j.ok && d.status === 'CONNECTED') {
-        setStatus({ keadaan: 'ok', teks: d.nama ? `Terhubung: ${d.nama}` : 'Terhubung' });
+        setStatus({
+          keadaan: 'ok',
+          teks: d.nama ? `Terhubung: ${d.nama}` : 'Terhubung',
+          detail: d.nomor ? `Nomor ${d.nomor}` : '',
+        });
+      } else if (j.ok) {
+        setStatus({
+          keadaan: 'gagal',
+          teks: `WA tidak terhubung (${d.status || 'status kosong'})`,
+          detail: 'Perangkat terdaftar di Whacenter, tapi WhatsApp-nya sedang putus — scan ulang QR atau cek HP-nya.',
+        });
       } else {
-        setStatus({ keadaan: 'gagal', teks: 'Tidak terhubung' });
+        setStatus({ keadaan: 'gagal', teks: j.message || 'Gagal cek device', detail: j.message || '' });
       }
-    } catch {
-      setStatus({ keadaan: 'gagal', teks: 'Error koneksi' });
+    } catch (e) {
+      setStatus({ keadaan: 'gagal', teks: 'Tidak bisa menghubungi server', detail: e.message });
     }
   };
 
@@ -155,9 +167,10 @@ function StatusDevice() {
   const warna = { ok: 'bg-green shadow-[0_0_8px] shadow-green', gagal: 'bg-red', cek: 'bg-amber', belum: 'bg-dim' };
   return (
     <button onClick={cek}
-      className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-line bg-bg px-3.5 py-2.5 text-left transition-colors hover:border-dim">
-      <span className="text-xs font-semibold text-dim">{status.teks}</span>
-      <span className={`size-2.5 shrink-0 rounded-full ${warna[status.keadaan]}`} />
+      title={status.detail ? `${status.teks}\n${status.detail}\n\nKlik untuk cek ulang.` : 'Klik untuk cek ulang.'}
+      className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-line bg-bg px-3.5 py-2.5 text-left transition-colors hover:border-dim">
+      <span className="text-xs font-semibold leading-snug text-dim">{status.teks}</span>
+      <span className={`mt-1 size-2.5 shrink-0 self-start rounded-full ${warna[status.keadaan]}`} />
     </button>
   );
 }
